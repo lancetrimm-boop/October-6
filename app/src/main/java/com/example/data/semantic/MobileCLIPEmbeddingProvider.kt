@@ -12,6 +12,7 @@ import java.nio.FloatBuffer
  * Provides:
  * - 512-dimensional visual embeddings
  * - NCHW image preprocessing [1, 3, 256, 256]
+ * - 85% center-crop before resize (improves subject focus for photos & video frames)
  * - Pixel scaling to [0.0, 1.0]
  * - L2 unit normalization
  */
@@ -37,6 +38,8 @@ class MobileCLIPEmbeddingProvider(
 
     companion object {
         private val globalInferenceSemaphore = kotlinx.coroutines.sync.Semaphore(1)
+        /** Fraction of the shorter side retained for center crop before model resize. */
+        private const val CENTER_CROP_FRACTION = 0.85f
     }
 
     override suspend fun generateEmbedding(
@@ -62,7 +65,7 @@ class MobileCLIPEmbeddingProvider(
         return@withContext try {
             globalInferenceSemaphore.withPermit {
                 android.util.Log.i("QUERY_EMBEDDING", "CLIP_IMAGE_INFER_START: mediaId=$mediaId bitmap=${bitmap.width}x${bitmap.height}")
-                // 1. Preprocess: Resize and convert to NCHW FloatBuffer
+                // 1. Preprocess: 85% center-crop, resize, convert to NCHW FloatBuffer
                 val processedBuffer = preprocessBitmap(bitmap)
 
                 // 2. Inference
@@ -98,19 +101,28 @@ class MobileCLIPEmbeddingProvider(
     }
 
     private fun preprocessBitmap(bitmap: Bitmap): FloatBuffer {
-        // Model expects 256x256
         val targetSize = 256
-        val scaledBitmap = if (bitmap.width != targetSize || bitmap.height != targetSize) {
-            Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
-        } else {
+
+        // 85% center-crop: keep the central region to focus on subject (photos + video frames)
+        val cropSide = (minOf(bitmap.width, bitmap.height) * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
+        val cropX = ((bitmap.width - cropSide) / 2).coerceAtLeast(0)
+        val cropY = ((bitmap.height - cropSide) / 2).coerceAtLeast(0)
+        val cropped = try {
+            Bitmap.createBitmap(bitmap, cropX, cropY, cropSide, cropSide)
+        } catch (_: Exception) {
             bitmap
+        }
+
+        val scaledBitmap = if (cropped.width != targetSize || cropped.height != targetSize) {
+            Bitmap.createScaledBitmap(cropped, targetSize, targetSize, true)
+        } else {
+            cropped
         }
 
         val totalPixels = targetSize * targetSize
         val pixels = IntArray(totalPixels)
         scaledBitmap.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize)
 
-        // Single-pass NCHW extraction directly into FloatBuffer backing array
         val buffer = FloatBuffer.allocate(3 * totalPixels)
         val backingArray = buffer.array()
         
@@ -124,8 +136,11 @@ class MobileCLIPEmbeddingProvider(
             backingArray[bOffset + i] = (px and 0xFF) / 255.0f
         }
 
-        if (scaledBitmap !== bitmap) {
+        if (scaledBitmap !== bitmap && scaledBitmap !== cropped) {
             scaledBitmap.recycle()
+        }
+        if (cropped !== bitmap) {
+            cropped.recycle()
         }
 
         buffer.rewind()
