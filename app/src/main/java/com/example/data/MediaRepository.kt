@@ -509,6 +509,8 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     // 45s watchdog fires forceTimeoutState() on cold starts.
                     _databaseState.value = DatabaseState.READY
                     startDatabaseObservers(db)
+                    startAiHealthObserver(context)
+                    startStuckEnrichmentRecovery(context)
                     try {
                         db.mediaDao().markUnextractableMediaAsTerminal()
                     } catch (e: Exception) {
@@ -519,6 +521,10 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     launch {
                         try {
                             initAI(context)
+                            if (_aiState.value == AIState.READY) {
+                                backfillSemantics()
+                                applicationContext?.let { ctx -> AuraEnrichmentWorker.schedule(ctx) }
+                            }
                         } catch (e: Exception) {
                             Log.e("MediaRepository", "Non-fatal background AI initialization error", e)
                             _aiState.value = AIState.ERROR
@@ -1432,6 +1438,8 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         return when (getEffectiveCompatibilityStatus(item)) {
             CompatibilityStatus.PLAYABLE,
             CompatibilityStatus.PLAYABLE_SOFTWARE_DECODE,
+            CompatibilityStatus.ANALYSIS_PENDING,
+            CompatibilityStatus.ANALYSIS_IN_PROGRESS,
             CompatibilityStatus.THUMBNAIL_FAILED -> true
             else -> false
         }
@@ -1561,7 +1569,7 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                             sizeBytes = size,
                             dateAdded = if (dateAdded > 0) dateAdded else System.currentTimeMillis(),
                             dateModified = dateModified,
-                            compatibilityStatus = CompatibilityStatus.ANALYSIS_PENDING.name
+                            compatibilityStatus = CompatibilityStatus.PLAYABLE.name
                         )
                     )
                     ids.add("local_vid_$id")
@@ -1696,7 +1704,7 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
             } 
         } 
     }
-    private suspend fun backfillSemantics() { database?.mediaDao()?.getAllMediaSync()?.filter { it.compatibilityStatus == "PLAYABLE" && !it.isDeleted }?.let { processSemanticsForBatch(it) } }
+    private suspend fun backfillSemantics() { database?.mediaDao()?.getAllMediaSync()?.filter { it.compatibilityStatus in listOf("PLAYABLE", "PLAYABLE_SOFTWARE_DECODE", "ANALYSIS_PENDING") && !it.isDeleted }?.let { processSemanticsForBatch(it) } }
     private suspend fun processSemanticsForBatch(entities: List<MediaEntity>) { val sIdx = semanticIndexingService ?: return; val vIdx = visualIndexingService; val ctx = applicationContext ?: return; entities.forEach { entity -> try { val item = entity.toMediaItem(); sIdx.indexMediaItem(item); vIdx?.indexVisual(ctx, item) } catch (e: Exception) { if (e is CancellationException) throw e } } }
     private suspend fun deleteSemanticDataForMedia(id: String) { semanticRepresentationRepository?.deleteForMedia(id) }
     
@@ -2114,8 +2122,10 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
 
                         val isCompleteWithFailures = (verifiedCount + terminalFailedCount >= totalEligible) && totalEligible > 0
 
+                        val currentAiState = _aiState.value
                         val st = when {
                             totalEligible == 0 -> VisualIndexState.NEUTRAL_EMPTY
+                            !isProviderReady && (currentAiState == AIState.BOOTSTRAP || currentAiState == AIState.NOT_INITIALIZED) -> VisualIndexState.YELLOW_INDEXING
                             !isProviderReady -> VisualIndexState.RED_INCOMPLETE
                             terminalFailedCount > 0 && terminalFailedCount >= failedCount -> VisualIndexState.RED_INCOMPLETE
                             isCompleteWithFailures || (verifiedCount >= totalEligible && totalEligible > 0) -> VisualIndexState.GREEN_READY
@@ -2126,7 +2136,7 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                             scope.launch(Dispatchers.IO) {
                                 kotlinx.coroutines.delay(1500L)
                                 db.mediaDao().recoverStuckEnrichment()
-                                applicationContext?.let { ctx -> AuraEnrichmentWorker.schedule(ctx) }
+                                applicationContext?.let { ctx -> scheduleEnrichmentWhenReady(ctx) }
                             }
                         }
 
@@ -2139,8 +2149,12 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                                 }
                             }
                             VisualIndexState.YELLOW_INDEXING -> {
-                                val pct = if (totalEligible > 0) (verifiedCount * 100) / totalEligible else 0
-                                "Indexing Visuals: $verifiedCount / $totalEligible ($pct%)"
+                                if (!isProviderReady) {
+                                    "Visual Index Engine Loading..."
+                                } else {
+                                    val pct = if (totalEligible > 0) (verifiedCount * 100) / totalEligible else 0
+                                    "Indexing Visuals: $verifiedCount / $totalEligible ($pct%)"
+                                }
                             }
                             VisualIndexState.RED_INCOMPLETE -> {
                                 if (!isProviderReady) "Visual Index Engine Loading..."
@@ -2170,10 +2184,85 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                 database?.mediaDao()?.recoverStuckEnrichment()
                 scanLocalMedia(context, isManual = true)
                 reconcileExistingMedia(context)
-                backfillSemantics()
-                AuraEnrichmentWorker.schedule(context)
+                scheduleEnrichmentWhenReady(context)
             } catch (e: Exception) {
                 Log.e("MediaRepository", "Error during library refresh", e)
+            }
+        }
+    }
+
+    private suspend fun scheduleEnrichmentWhenReady(context: Context) {
+        if (_aiState.value != AIState.READY) {
+            try {
+                _aiState.first { it == AIState.READY || it == AIState.ERROR }
+            } catch (_: Exception) {}
+        }
+        if (_aiState.value == AIState.READY) {
+            backfillSemantics()
+            AuraEnrichmentWorker.schedule(context)
+        }
+    }
+
+    private var aiHealthJob: Job? = null
+    private var lastAiRecoveryTimestamp = 0L
+
+    private fun startAiHealthObserver(context: Context) {
+        aiHealthJob?.cancel()
+        aiHealthJob = scope.launch(Dispatchers.IO) {
+            var bootstrapStartTime = System.currentTimeMillis()
+            while (isActive) {
+                delay(5000L)
+                val currentState = _aiState.value
+                val isProviderReady = mobileCLIPProvider?.isReady() == true
+                val now = System.currentTimeMillis()
+                
+                val isStuckBootstrap = currentState == AIState.BOOTSTRAP && !isProviderReady && (now - bootstrapStartTime > 30000L)
+                val isFailedError = currentState == AIState.ERROR
+                
+                if ((isFailedError || isStuckBootstrap) && (now - lastAiRecoveryTimestamp > 60000L)) {
+                    lastAiRecoveryTimestamp = now
+                    bootstrapStartTime = now
+                    Log.w("MediaRepository", "Auto-recovering AI engine after ERROR / not-ready (state=$currentState, providerReady=$isProviderReady)")
+                    try {
+                        initAI(context)
+                        if (_aiState.value == AIState.READY) {
+                            scheduleEnrichmentWhenReady(context)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MediaRepository", "Auto-recovery initAI failed", e)
+                        _aiState.value = AIState.ERROR
+                    }
+                }
+            }
+        }
+    }
+
+    private var stuckRecoveryJob: Job? = null
+
+    private fun startStuckEnrichmentRecovery(context: Context) {
+        stuckRecoveryJob?.cancel()
+        stuckRecoveryJob = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(120000L) // Every 2 minutes
+                val db = database ?: continue
+                val metrics = try { db.mediaDao().getEnrichmentMetrics() } catch (_: Exception) { null }
+                val totalEligible = metrics?.totalEligible ?: 0
+                val verifiedVisualCount = metrics?.visualCount ?: 0
+                val failedCount = metrics?.failedCount ?: 0
+                val terminalFailedCount = metrics?.terminalFailedCount ?: 0
+
+                val isComplete = totalEligible > 0 && (verifiedVisualCount + terminalFailedCount >= totalEligible)
+                if (!isComplete || failedCount > terminalFailedCount) {
+                    Log.d("MediaRepository", "Background auto-recovering stuck enrichment: verified=$verifiedVisualCount / total=$totalEligible, failed=$failedCount")
+                    try {
+                        db.mediaDao().recoverStuckEnrichment()
+                        if (_aiState.value == AIState.READY) {
+                            scheduleEnrichmentWhenReady(context)
+                        }
+                    } catch (e: Exception) {
+                        Log.w("MediaRepository", "Background stuck recovery iteration failed", e)
+                    }
+                }
             }
         }
     }
