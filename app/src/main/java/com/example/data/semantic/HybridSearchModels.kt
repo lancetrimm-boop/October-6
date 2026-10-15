@@ -177,15 +177,17 @@ data class RankedChannelItem(
 data class HybridSearchConfig(
     val rrfConstantK: Int = 60,
     val channelWeights: Map<SearchChannel, Double> = mapOf(
-        SearchChannel.KEYWORD to 0.8,
-        SearchChannel.SEMANTIC_CONTENT to 0.4,
-        SearchChannel.SEMANTIC_VISUAL to 0.5,
-        SearchChannel.PERSONALIZED to 0.1
+        SearchChannel.KEYWORD to 1.0,
+        SearchChannel.SEMANTIC_CONTENT to 0.40,
+        SearchChannel.SEMANTIC_VISUAL to 0.55,
+        SearchChannel.PERSONALIZED to 0.0
     ),
     val topK: Int = 40,
     val minSemanticSimilarity: Float = 0.35f,
-    val minTextSemanticSimilarity: Float = 0.1f,
-    val minNeuralRetrievalSimilarity: Float = 0.15f
+    val minTextSemanticSimilarity: Float = 0.28f,
+    val minNeuralRetrievalSimilarity: Float = 0.22f,
+    val relativeNeuralCutoff: Float = 0.72f,
+    val maxPureNeuralResults: Int = 24
 ) {
     init {
         require(rrfConstantK > 0) { "rrfConstantK must be positive (got $rrfConstantK)" }

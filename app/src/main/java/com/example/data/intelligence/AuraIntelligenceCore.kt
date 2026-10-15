@@ -734,6 +734,9 @@ class AuraIntelligenceCore(
 
             val finalScore = when {
                 isSimilarMode -> visualScore.toDouble()
+                request.mode == IntelligenceMode.SEARCH -> {
+                    ((keywordScore / 100f) * 2.0) + (maxNeuralSimilarity * 1.4) + (fusedCandidate.rrfScore * 0.4)
+                }
                 isRetrievalMode -> fusedCandidate.rrfScore
                 else -> (fusedCandidate.rrfScore * 0.7) + (personalScore.toDouble() * 0.3) + (explorationEvidence.explorationScore.toDouble() * 0.05) + (relBonus * 0.1) + pairwiseImpact.toDouble()
             }
@@ -745,11 +748,42 @@ class AuraIntelligenceCore(
                 provenance = buildProvenance(evidence, finalScore)
             )
         }
-        val sortedCandidates = if (isSimilarMode) {
-            candidates.sortedByDescending { it.rankScore }
+        val searchFilteredCandidates = if (request.mode == IntelligenceMode.SEARCH) {
+            val bestNeural = candidates.maxOfOrNull { c ->
+                c.evidence.filter { it.type == EvidenceType.SEMANTIC_RELEVANCE || it.type == EvidenceType.VISUAL_SIMILARITY }
+                    .maxOfOrNull { it.score } ?: 0f
+            } ?: 0f
+
+            val cutoffThreshold = maxOf(precisionThreshold, bestNeural * config.relativeNeuralCutoff)
+
+            var pureNeuralCount = 0
+            candidates.filter { candidate ->
+                val hasLexical = candidate.evidence.any { it.type == EvidenceType.LEXICAL_MATCH && it.score > 0f }
+                val maxNeural = candidate.evidence.filter { it.type == EvidenceType.SEMANTIC_RELEVANCE || it.type == EvidenceType.VISUAL_SIMILARITY }
+                    .maxOfOrNull { it.score } ?: 0f
+
+                if (hasLexical) {
+                    true
+                } else {
+                    if (maxNeural >= cutoffThreshold && pureNeuralCount < config.maxPureNeuralResults) {
+                        pureNeuralCount++
+                        true
+                    } else {
+                        DecisionTraceCollector.logEvent(
+                            request.requestId,
+                            com.example.ui.models.TraceEventType.ELIGIBILITY_CHECK,
+                            detail = "Dropped (Relative Neural Cutoff $maxNeural < $cutoffThreshold)",
+                            metadata = mapOf("itemId" to candidate.item.id)
+                        )
+                        false
+                    }
+                }
+            }
         } else {
             candidates
         }
+
+        val sortedCandidates = searchFilteredCandidates.sortedByDescending { it.rankScore }
         return finalizeResults(sortedCandidates, request)
     }
 

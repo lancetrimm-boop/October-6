@@ -1445,9 +1445,44 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         }
     }
 
-    private fun performLegacySearch(items: List<MediaItem>, query: String): List<MediaItem> {
+    internal fun calculateLexicalScore(item: MediaItem, query: String): Float {
         val q = query.trim().lowercase()
-        return items.filter { it.title.lowercase().contains(q) || it.genre.lowercase().contains(q) || it.moodTags.any { t -> t.lowercase().contains(q) } || it.year.toString().contains(q) }
+        if (q.isBlank()) return 0f
+
+        val title = item.title.lowercase()
+        val filename = item.uriPath.substringAfterLast('/').substringAfterLast('\\').lowercase()
+        val genre = item.genre.lowercase()
+        val tags = item.moodTags.map { it.lowercase() }
+        val tokens = q.split(Regex("""\s+""")).filter { it.isNotBlank() }
+
+        var score = 0f
+
+        if (title == q || filename == q) {
+            score = maxOf(score, 100f)
+        } else if (title.startsWith(q) || filename.startsWith(q)) {
+            score = maxOf(score, 90f)
+        } else if (title.contains(" $q") || filename.contains(" $q") || title.contains("_$q") || filename.contains("_$q") || title.contains("-$q") || filename.contains("-$q")) {
+            score = maxOf(score, 80f)
+        } else if (title.contains(q) || filename.contains(q)) {
+            score = maxOf(score, 70f)
+        } else if (genre == q || tags.any { it == q }) {
+            score = maxOf(score, 65f)
+        } else if (genre.contains(q) || tags.any { it.contains(q) }) {
+            score = maxOf(score, 50f)
+        } else if (tokens.size > 1 && tokens.all { t -> title.contains(t) || filename.contains(t) || genre.contains(t) || tags.any { it.contains(t) } }) {
+            score = maxOf(score, 60f)
+        } else if (tokens.any { t -> title.contains(t) || filename.contains(t) || genre.contains(t) || tags.any { it.contains(t) } }) {
+            score = maxOf(score, 30f)
+        }
+
+        return score
+    }
+
+    private fun performLegacySearch(items: List<MediaItem>, query: String): List<MediaItem> {
+        return items.mapNotNull { item ->
+            val score = calculateLexicalScore(item, query)
+            if (score > 0f) Pair(item, score) else null
+        }.sortedByDescending { it.second }.map { it.first }
     }
 
     fun hasStoragePermission(context: Context): Boolean {
@@ -2084,11 +2119,18 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
 
     private inner class ProductionLexicalRetriever : LexicalCandidateRetriever { 
         override suspend fun retrieveKeywordCandidates(query: String, topK: Int): List<RankedChannelItem> { 
-            val q = query.trim().lowercase()
-            return visibleMediaItems.value.filter { item ->
-                item.title.lowercase().contains(q)
-            }.take(topK).mapIndexed { idx, item ->
-                RankedChannelItem(item.id, 100f, idx + 1)
+            val scored = visibleMediaItems.value.mapNotNull { item ->
+                val score = calculateLexicalScore(item, query)
+                if (score > 0f) Pair(item, score) else null
+            }.sortedByDescending { it.second }
+
+            return scored.take(topK).mapIndexed { idx, (item, score) ->
+                RankedChannelItem(
+                    mediaId = item.id,
+                    rawScore = score,
+                    rank = idx + 1,
+                    metadata = mapOf("is_authoritative" to (score >= 70f).toString())
+                )
             }
         } 
     }
