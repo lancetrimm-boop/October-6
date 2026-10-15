@@ -885,6 +885,31 @@ object VideoPreviewPool {
     }
 
     @Synchronized
+    fun pauseAllActive() {
+        Log.d("VideoPreviewPool", "pauseAllActive: Pausing ${activePlayers.size} active preview players")
+        activePlayers.values.forEach { player ->
+            try {
+                if (player.isPlaying) {
+                    player.pause()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    @Synchronized
+    fun releaseIdlePool() {
+        Log.d("VideoPreviewPool", "releaseIdlePool: Releasing ${idlePlayers.size} idle players")
+        idlePlayers.forEach { player ->
+            try {
+                player.stop()
+                player.clearMediaItems()
+                player.release()
+            } catch (_: Exception) {}
+        }
+        idlePlayers.clear()
+    }
+
+    @Synchronized
     fun releaseAll() {
         accessOrder.clear()
         playerPriorities.clear()

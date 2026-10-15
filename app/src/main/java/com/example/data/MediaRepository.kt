@@ -678,7 +678,10 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                 }
             }
             _aiState.value = AIState.READY
-            try { AuraEnrichmentWorker.schedule(context) } catch (e: Exception) { Log.w("MediaRepository", "Failed to schedule AuraEnrichmentWorker", e) }
+            try { 
+                backfillSemantics()
+                AuraEnrichmentWorker.schedule(context) 
+            } catch (e: Exception) { Log.w("MediaRepository", "Failed to schedule enrichment", e) }
         } catch (e: Exception) { _aiState.value = AIState.ERROR }
     }
 

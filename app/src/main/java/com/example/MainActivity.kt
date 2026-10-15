@@ -116,6 +116,27 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStop() {
+        super.onStop()
+        Log.d("AuraLifecycle", "MainActivity.onStop: Trimming idle players and pausing active previews")
+        com.example.ui.components.VideoPreviewPool.pauseAllActive()
+        com.example.ui.components.VideoPreviewPool.releaseIdlePool()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        Log.d("AuraLifecycle", "MainActivity.onTrimMemory level=$level")
+        if (level >= TRIM_MEMORY_BACKGROUND || level == TRIM_MEMORY_UI_HIDDEN) {
+            com.example.ui.components.VideoPreviewPool.pauseAllActive()
+            com.example.ui.components.VideoPreviewPool.releaseIdlePool()
+            try {
+                coil.Coil.imageLoader(applicationContext).memoryCache?.clear()
+            } catch (e: Exception) {
+                Log.w("AuraLifecycle", "Failed to trim Coil image memory cache", e)
+            }
+        }
+    }
 }
 
 @Composable
