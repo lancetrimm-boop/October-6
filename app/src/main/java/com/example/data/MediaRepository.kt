@@ -2142,6 +2142,7 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         scope.launch(Dispatchers.IO) {
             try {
                 database?.mediaDao()?.recoverStuckEnrichment()
+                scanLocalMedia(context, isManual = true)
                 reconcileExistingMedia(context)
                 backfillSemantics()
                 AuraEnrichmentWorker.schedule(context)
