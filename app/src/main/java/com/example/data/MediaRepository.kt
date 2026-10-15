@@ -503,12 +503,10 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     searchFeedbackRepository = SearchFeedbackRepository(db.searchFeedbackDao(), scope)
                     conversionQueueRepository = ConversionQueueRepository(db.conversionJobDao(), db.userPreferenceDao(), androidx.work.WorkManager.getInstance(context))
                     semanticRepresentationRepository = RoomSemanticRepresentationRepository(db.semanticRepresentationDao())
-                    try {
-                        initAI(context)
-                    } catch (e: Exception) {
-                        Log.e("MediaRepository", "Non-fatal AI initialization error during startup", e)
-                        _aiState.value = AIState.ERROR
-                    }
+                    // Publish database readiness IMMEDIATELY once Room & SQLCipher are open.
+                    // AI model loading (ONNX asset extraction + session allocation) is heavy
+                    // and must not block DatabaseState.READY, otherwise the MainActivity
+                    // 45s watchdog fires forceTimeoutState() on cold starts.
                     _databaseState.value = DatabaseState.READY
                     startDatabaseObservers(db)
                     try {
@@ -516,8 +514,16 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     } catch (e: Exception) {
                         Log.w("MediaRepository", "Failed to mark unextractable media as terminal", e)
                     }
-                    launch { backfillSemantics(); AuraEnrichmentWorker.schedule(context) }
                     LegacyDatabaseEncryptionMigrator.cleanupLegacyBackups(context)
+                    // Bootstrap AI models asynchronously in the background
+                    launch {
+                        try {
+                            initAI(context)
+                        } catch (e: Exception) {
+                            Log.e("MediaRepository", "Non-fatal background AI initialization error", e)
+                            _aiState.value = AIState.ERROR
+                        }
+                    }
                 } catch (t: Throwable) { if (t !is CancellationException) { _databaseErrorMessage.value = t.message; _databaseState.value = DatabaseState.TRANSITION_FAILED } }
             }
         }
@@ -2176,6 +2182,15 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         val db = database ?: return
         scope.launch(Dispatchers.IO) {
             try {
+                // If the AI engine failed during startup (or was never ready), re-bootstrap
+                // it before attempting enrichment. Without this, every worker batch fails
+                // immediately and the UI stays stuck on "Tap to Retry".
+                if (_aiState.value == AIState.ERROR || mobileCLIPProvider?.isReady() != true) {
+                    applicationContext?.let { ctx ->
+                        Log.i("MediaRepository", "retryFailedEnrichment: re-bootstrapping AI engine")
+                        initAI(ctx)
+                    }
+                }
                 db.mediaDao().recoverStuckEnrichment()
                 applicationContext?.let { ctx ->
                     reconcileExistingMedia(ctx)
