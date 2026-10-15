@@ -565,9 +565,15 @@ fun MediaDetailScreen(
         playlistState?.items ?: listOf(item)
     }
 
-    LaunchedEffect(playlistIds) {
-        isFirstLaunch = true
-        repository.updatePlaybackPosition(0L)
+    var previousPlaylistIds by rememberSaveable { mutableStateOf<String?>(null) }
+    val playlistIdsString = remember(playlistIds) { playlistIds.joinToString(",") }
+
+    LaunchedEffect(playlistIdsString) {
+        if (previousPlaylistIds != null && previousPlaylistIds != playlistIdsString) {
+            isFirstLaunch = true
+            repository.updatePlaybackPosition(0L)
+        }
+        previousPlaylistIds = playlistIdsString
     }
 
     // AURA PHASE 2.1: Consolidated Playback Synchronization
