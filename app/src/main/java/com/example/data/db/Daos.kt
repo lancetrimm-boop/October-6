@@ -45,7 +45,12 @@ interface MediaDao {
     @Query("UPDATE media_items SET enrichmentStatus = :status, enrichmentFailureCount = 3, lastEnrichmentAttemptTimestamp = :timestamp WHERE id = :id")
     suspend fun recordEnrichmentFailure(id: String, status: String, timestamp: Long = System.currentTimeMillis())
 
-    @Query("UPDATE media_items SET enrichmentStatus = 'PENDING' WHERE enrichmentStatus = 'PROCESSING'")
+    @Query("""
+        UPDATE media_items 
+        SET enrichmentStatus = 'PENDING', enrichmentFailureCount = 0 
+        WHERE enrichmentStatus = 'PROCESSING' 
+        OR (enrichmentFailureCount >= 3 AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL'))
+    """)
     suspend fun recoverStuckEnrichment()
 
     @Query("""
@@ -53,7 +58,7 @@ interface MediaDao {
         SET enrichmentFailureCount = 3
         WHERE isDeleted = 0
         AND compatibilityStatus NOT IN ('CORRUPT', 'UNSUPPORTED', 'DELETED')
-        AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL' AND modelId = 'mobileclip-s0')
+        AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL')
         AND enrichmentFailureCount < 3
     """)
     suspend fun markUnextractableMediaAsTerminal()

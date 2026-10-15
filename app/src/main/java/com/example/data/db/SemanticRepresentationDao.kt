@@ -92,15 +92,11 @@ interface SemanticRepresentationDao {
         WHERE m.isDeleted = 0 
           AND m.compatibilityStatus NOT IN ('CORRUPT', 'UNSUPPORTED', 'DELETED')
           AND s.representationType = :type 
-          AND s.modelId = :modelId 
-          AND s.modelVersion = :version 
           AND s.dimensionality = :dim 
           AND length(s.vectorData) = :expectedByteLength
     """)
     fun observeVerifiedVisualCount(
         type: String = "VISUAL",
-        modelId: String = "mobileclip-s0",
-        version: Int = 1,
         dim: Int = 512,
         expectedByteLength: Int = 2048
     ): Flow<Int>

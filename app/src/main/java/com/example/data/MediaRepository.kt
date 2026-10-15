@@ -2138,6 +2138,19 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         }
     }
 
+    fun refreshLibrary(context: Context) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                database?.mediaDao()?.recoverStuckEnrichment()
+                reconcileExistingMedia(context)
+                backfillSemantics()
+                AuraEnrichmentWorker.schedule(context)
+            } catch (e: Exception) {
+                Log.e("MediaRepository", "Error during library refresh", e)
+            }
+        }
+    }
+
     fun retryFailedEnrichment() {
         val db = database ?: return
         scope.launch(Dispatchers.IO) {

@@ -140,6 +140,7 @@ fun LibraryScreen(
         onAutoScrollSpeedChange = { libraryPrefs?.setAutoScrollSpeed(it) },
         onGridDensityChange = { libraryPrefs?.setGridDensity(it) },
         onRefresh = { 
+            repository.refreshLibrary(context)
             repository.refreshSort()
         },
         onSafeDeleteRequest = { ids, launcher ->

@@ -120,12 +120,15 @@ class AuraEnrichmentWorker(
         val metrics = try { mediaDao.getEnrichmentMetrics() } catch (_: Exception) { null }
         val hasPendingItems = metrics != null && (metrics.totalEligible > metrics.completeCount)
 
-        if (!isStopped && totalProgressMade > 0) {
-            schedule(applicationContext)
-            return@withContext Result.success()
-        } else if (!isStopped && hasPendingItems && !hasVisualReady) {
-            Log.i(TAG, "Visual engine pending; scheduling retry to resume enrichment once AI models load.")
-            return@withContext Result.retry()
+        if (!isStopped && hasPendingItems) {
+            if (!hasVisualReady) {
+                Log.i(TAG, "Visual engine pending; scheduling retry to resume enrichment once AI models load.")
+                return@withContext Result.retry()
+            } else {
+                Log.i(TAG, "Pending items remain; scheduling continuation of enrichment worker.")
+                schedule(applicationContext)
+                return@withContext Result.success()
+            }
         }
 
         Result.success()
