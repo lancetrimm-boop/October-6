@@ -32,6 +32,9 @@ class DefaultVisualIndexingService(
         /** Version 6: Full-resolution photo decode reindex. */
         const val VISUAL_INDEX_VERSION = 5
         const val IMAGE_INDEX_VERSION = 6
+
+        /** Match TinyCLIP / MobileCLIP input size to avoid full-res decode + downscale. */
+        private const val INFERENCE_FRAME_SIZE = 224
     }
 
     override suspend fun initializeIndex() {
@@ -192,15 +195,21 @@ class DefaultVisualIndexingService(
 
             for (timeUs in timestamps) {
                 val frameDecodeStart = System.nanoTime()
+                // Request model input size directly (224 for TinyCLIP) to avoid
+                // full-resolution decode + later downscale in the provider.
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     retriever.getScaledFrameAtTime(
                         timeUs,
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        512,
-                        512
+                        INFERENCE_FRAME_SIZE,
+                        INFERENCE_FRAME_SIZE
                     )
                 } else {
-                    retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let {
+                        Bitmap.createScaledBitmap(it, INFERENCE_FRAME_SIZE, INFERENCE_FRAME_SIZE, true).also { scaled ->
+                            if (scaled !== it) it.recycle()
+                        }
+                    }
                 }
                 inferenceDecodeMs += (System.nanoTime() - frameDecodeStart) / 1_000_000
 

@@ -13,18 +13,22 @@ import kotlin.math.abs
 /**
  * Deterministic sampler for video frames to improve visual coverage.
  * Now evolved to support adaptive scene-aware sampling using visual change detection.
+ *
+ * Quick-fix (2026-10-15): lowered inference and analysis budgets so background
+ * indexing stays in the 1–3 s/video range on mid-range devices while preserving
+ * adaptive keyframe selection.
  */
 object VideoFrameSampler {
     private const val TAG = "VideoFrameSampler"
     
-    // --- STAGE 9 CONFIGURATION ---
-    private const val ANALYSIS_SAMPLE_COUNT = 15
+    // --- STAGE 9 CONFIGURATION (quick-fix budgets) ---
+    private const val ANALYSIS_SAMPLE_COUNT = 9
     private const val ANALYSIS_BITMAP_SIZE = 64
-    private const val MAX_INFERENCE_SAMPLES = 8
+    private const val MAX_INFERENCE_SAMPLES = 4
     private const val MIN_FRAME_DISTANCE_MS = 3000L
     
     // Stage 8 Constants
-    private const val MAX_SAMPLES_STAGE_8 = 5
+    private const val MAX_SAMPLES_STAGE_8 = 4
     private const val MIN_MULTI_FRAME_DURATION = 2000L
 
     data class SamplingResult(
@@ -100,7 +104,7 @@ object VideoFrameSampler {
         return try {
             retriever.setDataSource(context, Uri.parse(uriString))
             
-            // 1. Generate analysis timestamps (15 points)
+            // 1. Generate analysis timestamps
             val analysisPoints = generateAnalysisPoints(durationMs)
             val changes = mutableListOf<Pair<Long, Float>>()
             
