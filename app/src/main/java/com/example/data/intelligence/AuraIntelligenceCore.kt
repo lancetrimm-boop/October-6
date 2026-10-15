@@ -754,29 +754,47 @@ class AuraIntelligenceCore(
                     .maxOfOrNull { it.score } ?: 0f
             } ?: 0f
 
-            val cutoffThreshold = maxOf(precisionThreshold, bestNeural * config.relativeNeuralCutoff)
+            val cutoffThreshold = maxOf(config.minTextSemanticSimilarity, bestNeural * config.relativeNeuralCutoff)
 
-            var pureNeuralCount = 0
-            candidates.filter { candidate ->
+            val lexicalCandidates = mutableListOf<IntelligenceCandidate>()
+            val pureNeuralCandidates = mutableListOf<IntelligenceCandidate>()
+
+            candidates.forEach { candidate ->
                 val hasLexical = candidate.evidence.any { it.type == EvidenceType.LEXICAL_MATCH && it.score > 0f }
                 val maxNeural = candidate.evidence.filter { it.type == EvidenceType.SEMANTIC_RELEVANCE || it.type == EvidenceType.VISUAL_SIMILARITY }
                     .maxOfOrNull { it.score } ?: 0f
 
                 if (hasLexical) {
+                    lexicalCandidates.add(candidate)
+                } else if (maxNeural >= cutoffThreshold) {
+                    pureNeuralCandidates.add(candidate)
+                } else {
+                    DecisionTraceCollector.logEvent(
+                        request.requestId,
+                        com.example.ui.models.TraceEventType.ELIGIBILITY_CHECK,
+                        detail = "Dropped (Relative Neural Cutoff $maxNeural < $cutoffThreshold)",
+                        metadata = mapOf("itemId" to candidate.item.id)
+                    )
+                }
+            }
+
+            val cappedPureNeural = pureNeuralCandidates.sortedByDescending { it.rankScore }.take(config.maxPureNeuralResults)
+            val combined = (lexicalCandidates + cappedPureNeural).sortedByDescending { it.rankScore }
+            val topRankScore = combined.firstOrNull()?.rankScore ?: 0.0
+            val relativeCliffScore = topRankScore * config.minRankScoreRatioOfTop.toDouble()
+
+            combined.filter { candidate ->
+                val isAuthoritativeLexical = candidate.evidence.any { it.type == EvidenceType.LEXICAL_MATCH && it.score >= 70f }
+                if (isAuthoritativeLexical || candidate.rankScore >= relativeCliffScore) {
                     true
                 } else {
-                    if (maxNeural >= cutoffThreshold && pureNeuralCount < config.maxPureNeuralResults) {
-                        pureNeuralCount++
-                        true
-                    } else {
-                        DecisionTraceCollector.logEvent(
-                            request.requestId,
-                            com.example.ui.models.TraceEventType.ELIGIBILITY_CHECK,
-                            detail = "Dropped (Relative Neural Cutoff $maxNeural < $cutoffThreshold)",
-                            metadata = mapOf("itemId" to candidate.item.id)
-                        )
-                        false
-                    }
+                    DecisionTraceCollector.logEvent(
+                        request.requestId,
+                        com.example.ui.models.TraceEventType.ELIGIBILITY_CHECK,
+                        detail = "Dropped (Relative Score Cliff ${candidate.rankScore} < $relativeCliffScore)",
+                        metadata = mapOf("itemId" to candidate.item.id)
+                    )
+                    false
                 }
             }
         } else {
