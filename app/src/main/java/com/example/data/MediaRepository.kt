@@ -499,15 +499,14 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     searchFeedbackRepository = SearchFeedbackRepository(db.searchFeedbackDao(), scope)
                     conversionQueueRepository = ConversionQueueRepository(db.conversionJobDao(), db.userPreferenceDao(), androidx.work.WorkManager.getInstance(context))
                     semanticRepresentationRepository = RoomSemanticRepresentationRepository(db.semanticRepresentationDao())
-                    initAI(context)
                     _databaseState.value = DatabaseState.READY
                     startDatabaseObservers(db)
+                    scope.launch { initAI(context) }
                     try {
                         db.mediaDao().markUnextractableMediaAsTerminal()
                     } catch (e: Exception) {
                         Log.w("MediaRepository", "Failed to mark unextractable media as terminal", e)
                     }
-                    launch { backfillSemantics(); AuraEnrichmentWorker.schedule(context) }
                     LegacyDatabaseEncryptionMigrator.cleanupLegacyBackups(context)
                 } catch (t: Throwable) { if (t !is CancellationException) { _databaseErrorMessage.value = t.message; _databaseState.value = DatabaseState.TRANSITION_FAILED } }
             }
@@ -2102,9 +2101,17 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                         val st = when {
                             totalEligible == 0 -> VisualIndexState.NEUTRAL_EMPTY
                             !isProviderReady -> VisualIndexState.RED_INCOMPLETE
-                            failedCount > 0 -> VisualIndexState.RED_INCOMPLETE
+                            terminalFailedCount > 0 && terminalFailedCount >= failedCount -> VisualIndexState.RED_INCOMPLETE
                             isCompleteWithFailures || (verifiedCount >= totalEligible && totalEligible > 0) -> VisualIndexState.GREEN_READY
                             else -> VisualIndexState.YELLOW_INDEXING
+                        }
+
+                        if (failedCount > 0 && terminalFailedCount < failedCount && isProviderReady) {
+                            scope.launch(Dispatchers.IO) {
+                                kotlinx.coroutines.delay(1500L)
+                                db.mediaDao().recoverStuckEnrichment()
+                                applicationContext?.let { ctx -> AuraEnrichmentWorker.schedule(ctx) }
+                            }
                         }
 
                         val lbl = when (st) {
