@@ -12,24 +12,26 @@ import kotlin.math.abs
 
 /**
  * Deterministic sampler for video frames to improve visual coverage.
- * Now evolved to support adaptive scene-aware sampling using visual change detection.
+ * Adaptive scene-aware sampling with tight budgets for background indexing.
  *
- * Quick-fix (2026-10-15): lowered inference and analysis budgets so background
- * indexing stays in the 1–3 s/video range on mid-range devices while preserving
- * adaptive keyframe selection.
+ * 2026-10-15 quick-fixes:
+ * - Inference frames capped at 3
+ * - Short videos (<12s) use a single midpoint frame (no analysis pass)
+ * - Analysis points reduced to 9
  */
 object VideoFrameSampler {
     private const val TAG = "VideoFrameSampler"
     
-    // --- STAGE 9 CONFIGURATION (quick-fix budgets) ---
+    // --- STAGE 9 CONFIGURATION (speed-tuned) ---
     private const val ANALYSIS_SAMPLE_COUNT = 9
     private const val ANALYSIS_BITMAP_SIZE = 64
-    private const val MAX_INFERENCE_SAMPLES = 4
+    private const val MAX_INFERENCE_SAMPLES = 3
     private const val MIN_FRAME_DISTANCE_MS = 3000L
     
-    // Stage 8 Constants
-    private const val MAX_SAMPLES_STAGE_8 = 4
-    private const val MIN_MULTI_FRAME_DURATION = 2000L
+    // Stage 8 / short-video constants
+    private const val MAX_SAMPLES_STAGE_8 = 3
+    /** Below this duration: single midpoint frame, no adaptive analysis. */
+    private const val MIN_MULTI_FRAME_DURATION = 12_000L
 
     data class SamplingResult(
         val timestamps: List<Long>,
@@ -56,6 +58,7 @@ object VideoFrameSampler {
         context: Context? = null,
         uriString: String? = null
     ): SamplingResult = withContext(Dispatchers.IO) {
+        // Short clips: one midpoint frame — no analysis pass
         if (context == null || uriString == null || durationMs <= MIN_MULTI_FRAME_DURATION) {
             return@withContext SamplingResult(getDeterministicTimestamps(durationMs), 0L)
         }
@@ -69,11 +72,12 @@ object VideoFrameSampler {
     }
 
     /**
-     * Stage 8 baseline strategy: Evenly spaced temporal points.
+     * Stage 8 baseline strategy: Evenly spaced temporal points (or single midpoint for short clips).
      */
     private fun getDeterministicTimestamps(durationMs: Long): List<Long> {
         if (durationMs <= 0) return listOf(1_000_000L) // Default to 1s
         
+        // Short videos: single midpoint only
         if (durationMs < MIN_MULTI_FRAME_DURATION) {
             return listOf((durationMs / 2) * 1000L)
         }

@@ -28,13 +28,22 @@ interface MediaDao {
     @Query("SELECT * FROM media_items WHERE compatibilityStatus = 'ANALYSIS_PENDING' ORDER BY dateAdded DESC LIMIT :limit")
     suspend fun getPendingAnalysisBatch(limit: Int): List<MediaEntity>
 
+    /**
+     * Progressive enrichment queue: newest and most-engaged items first so
+     * See Similar / search feel useful within minutes on a large library.
+     * Older items backfill in the background.
+     */
     @Query("""
         SELECT * FROM media_items
         WHERE isDeleted = 0
         AND compatibilityStatus NOT IN ('CORRUPT', 'UNSUPPORTED', 'DELETED')
         AND enrichmentStatus IN ('PENDING', 'FAILED_RETRYABLE', 'TEXT_ONLY', 'VISUAL_ONLY')
         AND enrichmentFailureCount < 3
-        ORDER BY lastEnrichmentAttemptTimestamp ASC, lastViewedTimestamp DESC, dateAdded DESC
+        ORDER BY
+            dateAdded DESC,
+            lastViewedTimestamp DESC,
+            playCount DESC,
+            lastEnrichmentAttemptTimestamp ASC
         LIMIT :limit
     """)
     suspend fun getNextEnrichmentBatch(limit: Int): List<MediaEntity>
