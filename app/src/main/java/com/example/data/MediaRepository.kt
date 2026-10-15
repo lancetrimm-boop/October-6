@@ -499,14 +499,15 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     searchFeedbackRepository = SearchFeedbackRepository(db.searchFeedbackDao(), scope)
                     conversionQueueRepository = ConversionQueueRepository(db.conversionJobDao(), db.userPreferenceDao(), androidx.work.WorkManager.getInstance(context))
                     semanticRepresentationRepository = RoomSemanticRepresentationRepository(db.semanticRepresentationDao())
+                    initAI(context)
                     _databaseState.value = DatabaseState.READY
                     startDatabaseObservers(db)
-                    scope.launch { initAI(context) }
                     try {
                         db.mediaDao().markUnextractableMediaAsTerminal()
                     } catch (e: Exception) {
                         Log.w("MediaRepository", "Failed to mark unextractable media as terminal", e)
                     }
+                    launch { backfillSemantics(); AuraEnrichmentWorker.schedule(context) }
                     LegacyDatabaseEncryptionMigrator.cleanupLegacyBackups(context)
                 } catch (t: Throwable) { if (t !is CancellationException) { _databaseErrorMessage.value = t.message; _databaseState.value = DatabaseState.TRANSITION_FAILED } }
             }

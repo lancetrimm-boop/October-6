@@ -14,6 +14,11 @@ enum class IntelligenceMode {
     SORT
 }
 
+enum class RankingMode {
+    RETRIEVAL,
+    DISCOVERY
+}
+
 /**
  * Surface-provided intent to guide Core decision making.
  */
@@ -75,6 +80,7 @@ data class EvidenceItem(
  */
 data class IntelligenceRequest(
     val mode: IntelligenceMode,
+    val rankingMode: RankingMode = if (mode == IntelligenceMode.SEARCH) RankingMode.RETRIEVAL else RankingMode.DISCOVERY,
     val contextualIntent: ContextualIntent = ContextualIntent.LIBRARY_BROWSE,
     val query: String? = null,
     val referenceItemId: String? = null,

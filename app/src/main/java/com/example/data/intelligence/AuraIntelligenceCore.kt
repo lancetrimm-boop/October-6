@@ -688,44 +688,54 @@ class AuraIntelligenceCore(
                 ))
             }
             
-            val personalScore = scorePersonalization(item, tasteDNA)
-            evidence.add(EvidenceItem(
-                type = EvidenceType.TASTE_DNA_ALIGNMENT,
-                score = personalScore,
-                confidence = 0.9f,
-                status = EvidenceStatus.INFERRED,
-                provenance = "TasteDNA"
-            ))
+            val isRetrievalMode = request.rankingMode == RankingMode.RETRIEVAL
+
+            val personalScore = if (isRetrievalMode) 0.0 else scorePersonalization(item, tasteDNA)
+            if (!isRetrievalMode) {
+                evidence.add(EvidenceItem(
+                    type = EvidenceType.TASTE_DNA_ALIGNMENT,
+                    score = personalScore.toFloat(),
+                    confidence = 0.9f,
+                    status = EvidenceStatus.INFERRED,
+                    provenance = "TasteDNA"
+                ))
+            }
             
-            val explorationEvidence = ExplorationEngine.calculateEvidence(item, tasteDNA, stats, creators)
-            evidence.add(EvidenceItem(
-                type = EvidenceType.EXPLORATION_VALUE,
-                score = explorationEvidence.explorationScore,
-                confidence = 0.7f,
-                status = EvidenceStatus.INFERRED,
-                provenance = "ExplorationEngine"
-            ))
-            val wins = repository.getPairwiseWins()[item.id] ?: 0
-            val losses = repository.getPairwiseLosses()[item.id] ?: 0
-            val pairwiseImpact = (wins - losses).toFloat() * 0.1f
-            if (wins > 0 || losses > 0) {
+            val explorationEvidence = if (isRetrievalMode) {
+                ExplorationEngine.CandidateEvidence()
+            } else {
+                ExplorationEngine.calculateEvidence(item, tasteDNA, stats, creators)
+            }
+            if (!isRetrievalMode) {
+                evidence.add(EvidenceItem(
+                    type = EvidenceType.EXPLORATION_VALUE,
+                    score = explorationEvidence.explorationScore,
+                    confidence = 0.7f,
+                    status = EvidenceStatus.INFERRED,
+                    provenance = "ExplorationEngine"
+                ))
+            }
+            val wins = if (isRetrievalMode) 0 else (repository.getPairwiseWins()[item.id] ?: 0)
+            val losses = if (isRetrievalMode) 0 else (repository.getPairwiseLosses()[item.id] ?: 0)
+            val pairwiseImpact = if (isRetrievalMode) 0.0 else ((wins - losses).toFloat() * 0.1f)
+            if (!isRetrievalMode && (wins > 0 || losses > 0)) {
                 evidence.add(EvidenceItem(
                     type = EvidenceType.PAIRWISE_PREFERENCE,
-                    score = pairwiseImpact,
+                    score = pairwiseImpact.toFloat(),
                     confidence = 1.0f,
                     status = EvidenceStatus.KNOWN,
                     provenance = "InteractionMemory"
                 ))
             }
-            val relBonus = scoreRelationships(item, request.relatedMediaIds, evidence)
+            val relBonus = if (isRetrievalMode) 0.0 else scoreRelationships(item, request.relatedMediaIds, evidence)
 
             val visualScore = fusedCandidate.channelScores[SearchChannel.SEMANTIC_VISUAL] ?: maxNeuralSimilarity
             val formattedReason = if (isSimilarMode && visualScore > 0f) "${(visualScore * 100).toInt()}% Similar" else item.selectionReason
 
-            val finalScore = if (isSimilarMode) {
-                visualScore.toDouble()
-            } else {
-                (fusedCandidate.rrfScore * 0.7) + (personalScore * 0.3) + (explorationEvidence.explorationScore * 0.05) + (relBonus * 0.1) + pairwiseImpact
+            val finalScore = when {
+                isSimilarMode -> visualScore.toDouble()
+                isRetrievalMode -> fusedCandidate.rrfScore
+                else -> (fusedCandidate.rrfScore * 0.7) + (personalScore.toDouble() * 0.3) + (explorationEvidence.explorationScore.toDouble() * 0.05) + (relBonus * 0.1) + pairwiseImpact.toDouble()
             }
 
             IntelligenceCandidate(

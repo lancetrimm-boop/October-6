@@ -3,6 +3,7 @@ package com.example.data.semantic
 import com.example.data.intelligence.AuraIntelligenceCore
 import com.example.data.intelligence.IntelligenceRequest
 import com.example.data.intelligence.IntelligenceMode
+import com.example.data.intelligence.RankingMode
 import com.example.data.intelligence.EvidenceType
 
 /**
@@ -52,6 +53,7 @@ class DefaultHybridSearchEngine(
     ): HybridSearchResult {
         val coreRequest = IntelligenceRequest(
             mode = IntelligenceMode.SEARCH,
+            rankingMode = RankingMode.RETRIEVAL,
             query = request.query,
             visualVector = request.visualVector,
             queryVectors = if (request is SearchRequest.MultiVisual) request.visualVectors else null,
