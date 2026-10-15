@@ -480,14 +480,6 @@ fun LibraryContent(
                             subtitle = "Your complete media collection",
                             modifier = Modifier.weight(1f)
                         )
-
-                        visualReadiness?.let { readiness ->
-                            com.example.ui.components.VisualIndexReadinessPill(
-                                readiness = readiness,
-                                onRetryClick = { onRetryFailedEnrichment() },
-                                modifier = Modifier.padding(end = AuraSpacing.S)
-                            )
-                        }
                         
                         if (state.aiState != AIState.READY && state.aiState != AIState.NOT_INITIALIZED && state.aiState != AIState.DISABLED) {
                             Row(

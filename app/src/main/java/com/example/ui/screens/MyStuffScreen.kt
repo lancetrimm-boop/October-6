@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -113,6 +114,17 @@ fun MyStuffScreen(
                             }
                         }
                     }
+                }
+
+                // Move Visual Index indicator directly below the Profile button and above the Profile text
+                val visualReadiness by repository.observeVisualIndexReadiness().collectAsStateWithLifecycle(null)
+                visualReadiness?.let { readiness ->
+                    Spacer(modifier = Modifier.height(AuraSpacing.S))
+                    com.example.ui.components.VisualIndexReadinessPill(
+                        readiness = readiness,
+                        onRetryClick = { repository.retryFailedEnrichment() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

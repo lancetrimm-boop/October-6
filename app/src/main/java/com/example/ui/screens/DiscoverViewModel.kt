@@ -190,12 +190,9 @@ class DiscoverViewModel(
                     )
                     repository.updateDiscoverSnapshot(snapshot)
                     
-                    // Generate Taste Reveal only on major session starts
-                    val reveal = if (forceNewSession && !hasSeenTasteReveal) {
-                        TasteRevealGenerator.generate(dna, stats, profile)
-                    } else null
-
-                    _feedState.value = DiscoverFeedState.Success(snapshot, reveal)
+                    // Pull-to-refresh and feed updates refresh content directly in place without interrupting
+                    // the user with a Taste Reveal overlay.
+                    _feedState.value = DiscoverFeedState.Success(snapshot, null)
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
