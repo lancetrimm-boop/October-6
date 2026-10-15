@@ -85,11 +85,17 @@ class MainActivity : ComponentActivity() {
         // If the database is not ready within the timeout, we transition to a recovery state.
         // We use a longer timeout (30s) in Developer Builds to account for background model loading on emulators.
         lifecycleScope.launch {
-            val timeout = 30000L
-            kotlinx.coroutines.delay(timeout)
-            if (repository.databaseState.value != DatabaseState.READY) {
-                Log.w("AuraWatchdog", "Initialization timeout reached (${timeout / 1000}s). Triggering recovery UI.")
-                repository.forceTimeoutState()
+            val timeout = 45000L
+            val startTime = System.currentTimeMillis()
+            while (repository.databaseState.value != DatabaseState.READY) {
+                kotlinx.coroutines.delay(1000L)
+                if (System.currentTimeMillis() - startTime >= timeout) {
+                    if (repository.databaseState.value != DatabaseState.READY) {
+                        Log.w("AuraWatchdog", "Initialization timeout reached (${timeout / 1000}s). Triggering recovery UI.")
+                        repository.forceTimeoutState()
+                    }
+                    break
+                }
             }
         }
 

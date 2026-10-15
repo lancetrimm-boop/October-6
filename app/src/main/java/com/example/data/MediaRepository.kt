@@ -464,6 +464,10 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         if (_databaseState.value == DatabaseState.READY) return
 
         synchronized(this) {
+            if (_databaseState.value == DatabaseState.TIMEOUT || _databaseState.value == DatabaseState.TRANSITION_FAILED) {
+                initJob?.cancel()
+                initJob = null
+            }
             if (initJob?.isActive == true) return
             
             if (database != null) {
@@ -499,7 +503,12 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     searchFeedbackRepository = SearchFeedbackRepository(db.searchFeedbackDao(), scope)
                     conversionQueueRepository = ConversionQueueRepository(db.conversionJobDao(), db.userPreferenceDao(), androidx.work.WorkManager.getInstance(context))
                     semanticRepresentationRepository = RoomSemanticRepresentationRepository(db.semanticRepresentationDao())
-                    initAI(context)
+                    try {
+                        initAI(context)
+                    } catch (e: Exception) {
+                        Log.e("MediaRepository", "Non-fatal AI initialization error during startup", e)
+                        _aiState.value = AIState.ERROR
+                    }
                     _databaseState.value = DatabaseState.READY
                     startDatabaseObservers(db)
                     try {
