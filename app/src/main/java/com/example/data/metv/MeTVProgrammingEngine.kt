@@ -71,15 +71,16 @@ class MeTVProgrammingEngine {
         val visible = listOf(
             CompatibilityStatus.PLAYABLE,
             CompatibilityStatus.PLAYABLE_SOFTWARE_DECODE,
-            CompatibilityStatus.THUMBNAIL_FAILED
+            CompatibilityStatus.THUMBNAIL_FAILED,
+            CompatibilityStatus.ANALYSIS_PENDING,
+            CompatibilityStatus.ANALYSIS_IN_PROGRESS,
+            CompatibilityStatus.UNTESTED
         )
         val isVideoFilter = filterType.equals("VIDEO", ignoreCase = true) || filterType.equals("VIDEOS", ignoreCase = true) || filterType.equals("MOVIE", ignoreCase = true) || filterType.equals("MOVIES", ignoreCase = true)
         val isPhotoFilter = filterType.equals("PHOTO", ignoreCase = true) || filterType.equals("PHOTOS", ignoreCase = true) || filterType.equals("IMAGE", ignoreCase = true) || filterType.equals("IMAGES", ignoreCase = true)
         val homogeneousPool = availableMedia.filter { item ->
-            if (item.isDeleted || 
-                item.compatibilityStatus == CompatibilityStatus.ANALYSIS_PENDING || 
-                item.compatibilityStatus == CompatibilityStatus.UNTESTED || 
-                item.compatibilityStatus !in visible) return@filter false
+            if (item.isDeleted) return@filter false
+            if (item.compatibilityStatus !in visible) return@filter false
             val isVid = item.mediaType.equals("VIDEO", ignoreCase = true) || item.mediaType.equals("MOVIE", ignoreCase = true) || item.mediaType.startsWith("VIDEO", ignoreCase = true) || item.mediaType.startsWith("MOVIE", ignoreCase = true)
             if (isVideoFilter) isVid else if (isPhotoFilter) !isVid else true
         }

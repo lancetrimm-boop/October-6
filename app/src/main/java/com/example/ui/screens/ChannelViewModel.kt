@@ -65,22 +65,22 @@ class ChannelViewModel(
             return items.filter { !it.isDeleted && repository.isItemEligibleForCandidates(it) }
         }
 
+    private var isInitialized = false
+
     init {
         viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(
-                repository.presentationMediaStore.eligibleMedia,
-                _selectedFilterType
-            ) { eligible, _ ->
-                eligible
-            }.collect { eligible ->
-                if (eligible.isNotEmpty() && _channelPreviews.value.isEmpty()) {
+            repository.visibleMediaItems.collect { items ->
+                if (items.isNotEmpty() && !isInitialized) {
+                    isInitialized = true
                     loadChannelPreviews()
                 }
             }
         }
         viewModelScope.launch {
             _selectedFilterType.collect {
-                loadChannelPreviews()
+                if (isInitialized) {
+                    loadChannelPreviews()
+                }
             }
         }
         loadChannelPreviews()
