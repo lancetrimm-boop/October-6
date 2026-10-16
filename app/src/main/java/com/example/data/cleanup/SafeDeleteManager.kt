@@ -62,7 +62,7 @@ class SafeDeleteManager(
         recommendations: List<CleanupRecommendation>,
         launcher: ActivityResultLauncher<IntentSenderRequest>
     ) {
-        val isEntitled = repository.entitlementRepository?.isFeatureAvailable(
+        val isEntitled = recommendations.isEmpty() || repository.entitlementRepository?.isFeatureAvailable(
             com.example.data.entitlement.ProFeature.CLEANUP_AUTOMATION
         ) == true
 
