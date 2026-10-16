@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -389,7 +391,12 @@ fun CompareScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         key(pairwiseState.optionA.id) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 IconButton(
                                     onClick = { itemToDelete = pairwiseState.optionA },
                                     modifier = Modifier.align(Alignment.End).size(32.dp)
@@ -408,14 +415,19 @@ fun CompareScreen(
                                     traitBadge = traitContrast?.badgeA,
                                     onSelect = { onMediaSelect?.invoke(pairwiseState.optionA) },
                                     onFavoriteToggle = { onFavoriteToggle?.invoke(pairwiseState.optionA.id) },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.fillMaxWidth(),
                                     testTag = "choose_option_a"
                                 )
                             }
                         }
 
                         key(pairwiseState.optionB.id) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 IconButton(
                                     onClick = { itemToDelete = pairwiseState.optionB },
                                     modifier = Modifier.align(Alignment.End).size(32.dp)
@@ -434,7 +446,7 @@ fun CompareScreen(
                                     traitBadge = traitContrast?.badgeB,
                                     onSelect = { onMediaSelect?.invoke(pairwiseState.optionB) },
                                     onFavoriteToggle = { onFavoriteToggle?.invoke(pairwiseState.optionB.id) },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.fillMaxWidth(),
                                     testTag = "choose_option_b"
                                 )
                             }
@@ -563,9 +575,18 @@ private fun CompareMediaTile(
     // AURA REPAIR: Track if video is actually rendering to prevent black frame gap
     var isVideoRendering by remember(item.id) { mutableStateOf(false) }
 
+    val aspectRatio = remember(item.id, item.width, item.height) {
+        if (item.width > 0 && item.height > 0) {
+            item.width.toFloat() / item.height.toFloat()
+        } else {
+            1.0f
+        }
+    }
+
     Box(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .aspectRatio(aspectRatio)
             .clip(RoundedCornerShape(16.dp))
             .background(AuraMidnight)
             .border(1.dp, AuraSubtleBorder, RoundedCornerShape(16.dp))
