@@ -1298,13 +1298,6 @@ fun LibrarySearchBar(
                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
-                            if (textFieldValue.text.isEmpty() && activeReferences.isEmpty()) {
-                                Text(
-                                    text = "Search photos, videos, or concepts...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                             innerTextField()
                         }
                     }
@@ -1436,13 +1429,9 @@ private fun SearchHeader(
                 value = textFieldValue,
                 onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { 
-                    Text(
-                        if (activeReferences.isNotEmpty()) "Add constraint..." else "Search library...", 
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = AuraMutedSlate 
-                    ) 
-                },
+                placeholder = if (activeReferences.isNotEmpty()) {
+                    { Text("Add constraint...", style = MaterialTheme.typography.bodyLarge, color = AuraMutedSlate) }
+                } else null,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
