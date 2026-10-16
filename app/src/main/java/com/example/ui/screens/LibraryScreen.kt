@@ -348,7 +348,7 @@ fun LibraryContent(
     LaunchedEffect(latestSortedItems) {
         val currentIds = latestSortedItems.map { it.id }
         val stableIds = stableItems.map { it.id }
-        if (!isUnstableMode || stableItems.isEmpty() || currentIds != stableIds) {
+        if (stableItems.isEmpty() || currentIds.toSet() != stableIds.toSet()) {
             stableItems = latestSortedItems
         }
     }

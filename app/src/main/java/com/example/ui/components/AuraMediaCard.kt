@@ -146,6 +146,11 @@ fun AuraMediaTile(
         label = "tile_press_scale"
     )
 
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLike by rememberUpdatedState(onLike)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentIsSelectionMode by rememberUpdatedState(isSelectionMode)
+
     Box(
         modifier = modifier
             .aspectRatio(1f)
@@ -153,20 +158,20 @@ fun AuraMediaTile(
                 scaleX = scale
                 scaleY = scale
             }
-            .pointerInput(item.id, isSelectionMode) {
+            .pointerInput(item.id) {
                 detectTapGestures(
-                    onTap = { onClick() },
+                    onTap = { currentOnClick() },
                     onDoubleTap = {
                         // Double tap only active in normal browsing mode
-                        if (!isSelectionMode) {
+                        if (!currentIsSelectionMode) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             showDoubleTapHeart = true
-                            onLike()
+                            currentOnLike()
                         }
                     },
                     onLongPress = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onLongClick()
+                        currentOnLongClick()
                     }
                 )
             }
