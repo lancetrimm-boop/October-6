@@ -778,25 +778,25 @@ class AuraIntelligenceCore(
                 }
             }
 
-            val cappedPureNeural = pureNeuralCandidates.sortedByDescending { it.rankScore }.take(config.maxPureNeuralResults)
-            val combined = (lexicalCandidates + cappedPureNeural).sortedByDescending { it.rankScore }
-            val topRankScore = combined.firstOrNull()?.rankScore ?: 0.0
-            val relativeCliffScore = topRankScore * config.minRankScoreRatioOfTop.toDouble()
+            val sortedPureNeural = pureNeuralCandidates.sortedByDescending { it.rankScore }
+            val topPureNeuralScore = sortedPureNeural.firstOrNull()?.rankScore ?: 0.0
+            val pureNeuralCliffScore = topPureNeuralScore * config.minRankScoreRatioOfTop.toDouble()
 
-            combined.filter { candidate ->
-                val isAuthoritativeLexical = candidate.evidence.any { it.type == EvidenceType.LEXICAL_MATCH && it.score >= 70f }
-                if (isAuthoritativeLexical || candidate.rankScore >= relativeCliffScore) {
+            val filteredPureNeural = sortedPureNeural.filter { candidate ->
+                if (candidate.rankScore >= pureNeuralCliffScore) {
                     true
                 } else {
                     DecisionTraceCollector.logEvent(
                         request.requestId,
                         com.example.ui.models.TraceEventType.ELIGIBILITY_CHECK,
-                        detail = "Dropped (Relative Score Cliff ${candidate.rankScore} < $relativeCliffScore)",
+                        detail = "Dropped (Pure Neural Score Cliff ${candidate.rankScore} < $pureNeuralCliffScore)",
                         metadata = mapOf("itemId" to candidate.item.id)
                     )
                     false
                 }
-            }
+            }.take(config.maxPureNeuralResults)
+
+            (lexicalCandidates + filteredPureNeural)
         } else {
             candidates
         }

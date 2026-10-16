@@ -184,11 +184,11 @@ data class HybridSearchConfig(
     ),
     val topK: Int = 40,
     val minSemanticSimilarity: Float = 0.35f,
-    val minTextSemanticSimilarity: Float = 0.32f,
-    val minNeuralRetrievalSimilarity: Float = 0.26f,
-    val relativeNeuralCutoff: Float = 0.82f,
-    val maxPureNeuralResults: Int = 10,
-    val minRankScoreRatioOfTop: Float = 0.55f
+    val minTextSemanticSimilarity: Float = 0.26f,
+    val minNeuralRetrievalSimilarity: Float = 0.20f,
+    val relativeNeuralCutoff: Float = 0.72f,
+    val maxPureNeuralResults: Int = 16,
+    val minRankScoreRatioOfTop: Float = 0.42f
 ) {
     init {
         require(rrfConstantK > 0) { "rrfConstantK must be positive (got $rrfConstantK)" }

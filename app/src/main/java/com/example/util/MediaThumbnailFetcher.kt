@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import android.util.LruCache
 import android.util.Size
+import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -38,6 +39,56 @@ object MediaThumbnailFetcher {
 
     suspend fun getThumbnail(context: Context, uriString: String): Bitmap? = withContext(Dispatchers.IO) {
         if (uriString.isBlank()) return@withContext null
+
+        val uri = if (uriString.startsWith("/")) Uri.fromFile(File(uriString)) else Uri.parse(uriString)
+        val mimeType = try { context.contentResolver.getType(uri) } catch (_: Exception) { null }
+
+        if (MediaCompatibility.isSupportedPhoto(mimeType, uriString)) {
+            val cacheKey = generateCacheKey(uriString, -1L, TARGET_THUMBNAIL_SIZE) + "_ar"
+            memoryCache.get(cacheKey)?.let { return@withContext it }
+            val cacheFile = getCacheFile(context, cacheKey)
+            if (cacheFile.exists()) {
+                try {
+                    val bitmap = BitmapFactory.decodeFile(cacheFile.absolutePath)
+                    if (isValidBitmap(bitmap)) {
+                        memoryCache.put(cacheKey, bitmap)
+                        return@withContext bitmap
+                    }
+                } catch (_: Exception) {}
+            }
+            try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                val w = bounds.outWidth
+                val h = bounds.outHeight
+                if (w > 0 && h > 0) {
+                    var sample = 1
+                    val longEdge = maxOf(w, h)
+                    while (longEdge / sample > TARGET_THUMBNAIL_SIZE) sample *= 2
+                    val opts = BitmapFactory.Options().apply {
+                        inSampleSize = sample
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    var bitmap = context.contentResolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it, null, opts)
+                    }
+                    if (isValidBitmap(bitmap)) {
+                        val rotation = getExifRotation(context, uri)
+                        if (rotation != 0) {
+                            bitmap = MediaOrientationUtils.rotateBitmapIfNeeded(bitmap!!, rotation)
+                        }
+                        if (isValidBitmap(bitmap)) {
+                            saveToDiskCache(cacheFile, bitmap!!)
+                            memoryCache.put(cacheKey, bitmap)
+                            return@withContext bitmap
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Aspect ratio photo decode failed for $uriString: ${e.message}")
+            }
+        }
+
         memoryCache.get(uriString)?.let { return@withContext it }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && uriString.startsWith("content://")) {
             val cacheKey = generateCacheKey(uriString, -1L, TARGET_THUMBNAIL_SIZE)
@@ -52,7 +103,6 @@ object MediaThumbnailFetcher {
                 } catch (_: Exception) {}
             }
             try {
-                val uri = Uri.parse(uriString)
                 val bitmap = context.contentResolver.loadThumbnail(uri, Size(TARGET_THUMBNAIL_SIZE, TARGET_THUMBNAIL_SIZE), null)
                 if (isValidBitmap(bitmap) && !isBlackFrame(bitmap)) {
                     saveToDiskCache(cacheFile, bitmap)
@@ -66,6 +116,23 @@ object MediaThumbnailFetcher {
         val bitmap = getFrameAtTime(context, uriString, 2_000_000L)
         if (bitmap != null) memoryCache.put(uriString, bitmap)
         return@withContext bitmap
+    }
+
+    private fun getExifRotation(context: Context, uri: Uri): Int {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return 0
+            val exif = ExifInterface(inputStream)
+            inputStream.close()
+            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (_: Exception) {
+            0
+        }
     }
 
     /**

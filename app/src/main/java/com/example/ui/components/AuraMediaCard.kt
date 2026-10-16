@@ -999,6 +999,23 @@ fun VideoTilePreview(
     }
 
     val player = playerState
+    DisposableEffect(player, playerViewRef) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                playerViewRef?.requestLayout()
+                playerViewRef?.invalidate()
+            }
+            override fun onRenderedFirstFrame() {
+                playerViewRef?.requestLayout()
+                playerViewRef?.invalidate()
+            }
+        }
+        player?.addListener(listener)
+        onDispose {
+            player?.removeListener(listener)
+        }
+    }
+
     if (player != null) {
         AndroidView(
             factory = { ctx ->
@@ -1022,6 +1039,7 @@ fun VideoTilePreview(
                     playerView.player = player
                 }
                 playerView.requestLayout()
+                playerView.invalidate()
             },
             modifier = modifier
                 .fillMaxSize()

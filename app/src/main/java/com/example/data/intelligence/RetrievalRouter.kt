@@ -59,7 +59,7 @@ class RetrievalRouter(
             val query = request.query
             if (query != null && query.isNotBlank() && semanticProvider != null && semanticProvider.isReady()) {
                 try {
-                    val results = semanticProvider.retrieveSemanticCandidates(query, request.limit * 2, 0.26f)
+                    val results = semanticProvider.retrieveSemanticCandidates(query, request.limit * 2, 0.20f)
                     com.example.data.intelligence.DecisionTraceCollector.logEvent(
                         request.requestId,
                         com.example.ui.models.TraceEventType.CHANNEL_RETRIEVAL_COMPLETE,
@@ -108,7 +108,7 @@ class RetrievalRouter(
                         // AURA REPAIR: Only invoke text-to-visual if the query is a simple text request 
                         // and we have no visual vectors (prevent invalid type relay for multimodal)
                         query != null && query.isNotBlank() && request.queryVectors == null -> {
-                            provider.retrieveVisualCandidates(query, request.limit * 2, 0.30f)
+                            provider.retrieveVisualCandidates(query, request.limit * 2, 0.24f)
                         }
                         else -> emptyList()
                     }
