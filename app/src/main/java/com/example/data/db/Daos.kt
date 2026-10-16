@@ -58,6 +58,7 @@ interface MediaDao {
         UPDATE media_items 
         SET enrichmentStatus = 'PENDING', enrichmentFailureCount = 0 
         WHERE enrichmentStatus = 'PROCESSING' 
+        OR (enrichmentStatus = 'FAILED_RETRYABLE' AND enrichmentFailureCount < 3)
         OR (enrichmentFailureCount >= 3 AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL'))
     """)
     suspend fun recoverStuckEnrichment()

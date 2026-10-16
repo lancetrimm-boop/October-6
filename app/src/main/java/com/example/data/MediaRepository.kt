@@ -172,7 +172,10 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
         if (item.isDeleted) return false
         return when (getEffectiveCompatibilityStatus(item)) {
             CompatibilityStatus.PLAYABLE,
-            CompatibilityStatus.PLAYABLE_SOFTWARE_DECODE -> true
+            CompatibilityStatus.PLAYABLE_SOFTWARE_DECODE,
+            CompatibilityStatus.ANALYSIS_PENDING,
+            CompatibilityStatus.ANALYSIS_IN_PROGRESS,
+            CompatibilityStatus.THUMBNAIL_FAILED -> true
             else -> false
         }
     }

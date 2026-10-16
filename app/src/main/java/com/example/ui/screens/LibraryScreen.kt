@@ -92,10 +92,19 @@ fun LibraryScreen(
     val libraryPrefs = remember(repository) { repository.libraryPreferences }
     val gridDensity by (libraryPrefs?.gridDensity ?: MutableStateFlow(160f)).collectAsStateWithLifecycle()
     val autoScrollSpeed by (libraryPrefs?.autoScrollSpeed ?: MutableStateFlow(AutoScrollSpeed.MEDIUM)).collectAsStateWithLifecycle()
+    var stableMediaItems by remember { mutableStateOf(mediaItems) }
+    var lastSortKey by remember { mutableStateOf(Triple(selectedFilter, activeCategory, standardSort)) }
+
+    val currentSortKey = Triple(selectedFilter, activeCategory, standardSort)
+    if (currentSortKey != lastSortKey) {
+        lastSortKey = currentSortKey
+        stableMediaItems = mediaItems
+    }
+
     val visualReadiness by repository.observeVisualIndexReadiness().collectAsStateWithLifecycle(null)
 
     val uiState = LibraryPresentationState(
-        mediaItems = mediaItems,
+        mediaItems = stableMediaItems,
         selectedFilter = selectedFilter,
         activeCategory = activeCategory,
         standardSort = standardSort,

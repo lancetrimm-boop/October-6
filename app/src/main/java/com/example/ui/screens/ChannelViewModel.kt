@@ -66,17 +66,24 @@ class ChannelViewModel(
         }
 
     init {
-        // Observe eligibleMedia, candidateEligibleMediaItems, and visibleMediaItems changes to refresh channel previews
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(
                 repository.presentationMediaStore.eligibleMedia,
-                repository.candidateEligibleMediaItems,
-                repository.visibleMediaItems,
                 _selectedFilterType
-            ) { _, _, _, _ -> }.collect {
+            ) { eligible, _ ->
+                eligible
+            }.collect { eligible ->
+                if (eligible.isNotEmpty() && _channelPreviews.value.isEmpty()) {
+                    loadChannelPreviews()
+                }
+            }
+        }
+        viewModelScope.launch {
+            _selectedFilterType.collect {
                 loadChannelPreviews()
             }
         }
+        loadChannelPreviews()
         selectChannel(ChannelRegistry.defaultChannel())
     }
 
