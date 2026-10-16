@@ -105,22 +105,7 @@ class DiscoverViewModel(
             }
         }
 
-        // Phase 12: Observe intelligenceStats to refresh when personalization scores change (e.g. after Pairwise)
-        viewModelScope.launch {
-            var lastComparisons = repository.intelligenceStats.value.totalComparisons
-            repository.intelligenceStats.collect { stats ->
-                val currentState = _feedState.value
-                if (currentState is DiscoverFeedState.Success && currentState.snapshot.obsessions.isNotEmpty()) {
-                    if (stats.totalComparisons != lastComparisons) {
-                        lastComparisons = stats.totalComparisons
-                        android.util.Log.d("DiscoverViewModel", "Intelligence stats updated. Refreshing Discover scores.")
-                        refresh(forceNewSession = false)
-                    }
-                } else {
-                    lastComparisons = stats.totalComparisons
-                }
-            }
-        }
+
 
         // Phase 12: Refresh boundaries - Observe policy/intent changes
         viewModelScope.launch {
