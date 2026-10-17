@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -22,7 +24,8 @@ import com.example.ui.theme.*
 enum class MyStuffTab(val title: String) {
     PROFILE("Profile"),
     COLLECTIONS("Collections"),
-    SAVED("Saved")
+    SAVED("Saved"),
+    RECENTLY_VIEWED("Recently Viewed")
 }
 
 @Composable
@@ -73,7 +76,9 @@ fun MyStuffScreen(
                 Spacer(modifier = Modifier.height(AuraSpacing.S))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(AuraSpacing.S)
                 ) {
                     MyStuffTab.entries.forEach { tab ->
@@ -89,7 +94,7 @@ fun MyStuffScreen(
                             modifier = Modifier.height(32.dp)
                         ) {
                             Box(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp),
                                 contentAlignment = androidx.compose.ui.Alignment.Center
                             ) {
                                 Row(
@@ -157,6 +162,13 @@ fun MyStuffScreen(
                 }
                 MyStuffTab.SAVED -> {
                     SavedScreen(
+                        repository = repository,
+                        onMediaSelect = onMediaSelect,
+                        onLike = onFavoriteToggle
+                    )
+                }
+                MyStuffTab.RECENTLY_VIEWED -> {
+                    RecentlyViewedScreen(
                         repository = repository,
                         onMediaSelect = onMediaSelect,
                         onLike = onFavoriteToggle

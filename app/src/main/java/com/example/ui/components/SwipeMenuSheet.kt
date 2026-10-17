@@ -93,6 +93,8 @@ fun SwipeMenuSheet(
     onToggleSaved: (String) -> Unit = {},
     slideshowDelaySec: Int = 4,
     onSlideshowDelayChange: (Int) -> Unit = {},
+    isVisualIndexReady: Boolean = true,
+    onVisualIndexUnavailable: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -378,17 +380,31 @@ fun SwipeMenuSheet(
             ) {
                 PlayerActionButton(
                     label = "See Similar",
+                    enabled = isVisualIndexReady,
                     modifier = Modifier.weight(1f),
-                    onClick = { onSeeSimilar(activeItem) }
+                    onClick = {
+                        if (isVisualIndexReady) {
+                            onSeeSimilar(activeItem)
+                        } else {
+                            onVisualIndexUnavailable()
+                        }
+                    }
                 )
 
                 val visualSearchLabel = if (isVisualSearchActive) "Add to Search" else "Begin Visual Search"
                 PlayerActionButton(
                     label = visualSearchLabel,
+                    enabled = isVisualIndexReady,
                     modifier = Modifier
                         .weight(1f)
                         .testTag("begin_visual_search_button"),
-                    onClick = { onBeginVisualSearch(activeItem) }
+                    onClick = {
+                        if (isVisualIndexReady) {
+                            onBeginVisualSearch(activeItem)
+                        } else {
+                            onVisualIndexUnavailable()
+                        }
+                    }
                 )
 
                 PlayerActionButton(
@@ -405,15 +421,16 @@ fun SwipeMenuSheet(
 private fun PlayerActionButton(
     label: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier
             .height(44.dp)
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        color = AuraSlate.copy(alpha = 0.5f),
-        border = BorderStroke(1.dp, Color(0x33FFFFFF))
+            .clickable(enabled = enabled, onClick = onClick),
+        color = if (enabled) AuraSlate.copy(alpha = 0.5f) else AuraSlate.copy(alpha = 0.2f),
+        border = BorderStroke(1.dp, if (enabled) Color(0x33FFFFFF) else Color(0x11FFFFFF))
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -423,7 +440,7 @@ private fun PlayerActionButton(
                 text = label,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = AuraCrispWhite,
+                color = if (enabled) AuraCrispWhite else AuraCrispWhite.copy(alpha = 0.4f),
                 textAlign = TextAlign.Center
             )
         }

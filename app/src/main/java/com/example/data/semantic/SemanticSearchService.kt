@@ -278,7 +278,7 @@ class DefaultSemanticSearchService(
         expectedDescriptor: EmbeddingModelDescriptor?
     ): SemanticSearchResult = withContext(dispatcher) {
         val startTime = System.currentTimeMillis()
-        val providerDescriptor = embeddingProvider.descriptor
+        val providerDescriptor = expectedDescriptor ?: embeddingProvider.descriptor
 
         // 1. Compatibility Check
         if (!embeddingProvider.supportedTypes.contains(targetType)) {

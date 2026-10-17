@@ -30,17 +30,32 @@ def main():
     force_yes = "--yes" in sys.argv
 
     devices = get_devices()
-    if not devices:
-        print("ERROR: No Android devices detected. Please connect a physical device.")
-        sys.exit(1)
+    android_serial = os.environ.get("ANDROID_SERIAL")
 
-    if len(devices) > 1:
-        print("ERROR: Multiple devices detected. Please connect only one target device.")
-        for d in devices:
-            print(f" - {d}")
-        sys.exit(1)
+    if android_serial:
+        if android_serial in devices:
+            serial = android_serial
+        else:
+            print(f"ERROR: ANDROID_SERIAL='{android_serial}' is set but does not match any connected device.")
+            if devices:
+                print("Connected devices:")
+                for d in devices:
+                    print(f" - {d}")
+            else:
+                print("No connected devices detected.")
+            sys.exit(1)
+    else:
+        if not devices:
+            print("ERROR: No Android devices detected. Please connect a physical device.")
+            sys.exit(1)
 
-    serial = devices[0]
+        if len(devices) > 1:
+            print("ERROR: Multiple devices detected. Please connect only one target device.")
+            for d in devices:
+                print(f" - {d}")
+            sys.exit(1)
+
+        serial = devices[0]
     model = run_adb(["-s", serial, "shell", "getprop", "ro.product.model"])
     print(f"Target Device: {model} ({serial})")
 

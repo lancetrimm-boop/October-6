@@ -407,20 +407,6 @@ fun LibraryContent(
         }
     }
 
-    val visualSearchLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            coroutineScope.launch {
-                val bitmap = MediaThumbnailFetcher.getThumbnail(context, uri.toString())
-                if (bitmap != null) {
-                    onSearchByImage(bitmap, uri.toString())
-                    isSearchActive = true
-                }
-            }
-        }
-    }
-
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isLandscape = this.maxWidth > this.maxHeight
         
@@ -531,9 +517,6 @@ fun LibraryContent(
                     onClearSearch = {
                         searchFieldValue = TextFieldValue("")
                         onClearSearch()
-                    },
-                    onImageSearchClick = {
-                        visualSearchLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                 )
 
@@ -643,7 +626,6 @@ fun LibraryContent(
                         )
                     } else {
                         EmptyLibraryView(
-                            onImportClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                             onScanClick = { onTriggerScan() }
                         )
                     }
@@ -1213,7 +1195,6 @@ fun LibrarySearchBar(
     activeReferences: List<MediaItem>,
     onRemoveReference: (Int) -> Unit,
     onClearSearch: () -> Unit,
-    onImageSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -1324,18 +1305,6 @@ fun LibrarySearchBar(
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                }
-
-                IconButton(
-                    onClick = onImageSearchClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ImageSearch,
-                        contentDescription = "Visual search",
-                        tint = DiscoveryViolet,
-                        modifier = Modifier.size(20.dp)
-                    )
                 }
             }
         }
@@ -1634,7 +1603,6 @@ private fun CompactControlsRow(
 
 @Composable
 private fun EmptyLibraryView(
-    onImportClick: () -> Unit,
     onScanClick: () -> Unit
 ) {
     Column(
@@ -1660,34 +1628,39 @@ private fun EmptyLibraryView(
         }
         Spacer(modifier = Modifier.height(AuraSpacing.L))
         Text(
-            text = "Your library is empty",
+            text = "Meet your media library",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Black,
-            color = AuraMidnight
+            color = AuraMidnight,
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(AuraSpacing.XS))
         Text(
-            text = "Import media from your device or scan for local content to start building your intelligence profile.",
+            text = "Aura discovers your photos and videos on your device to power personalized playback and visual discovery.",
             style = MaterialTheme.typography.bodyMedium,
-            color = AuraMutedSlate, // Standardized color
+            color = AuraMutedSlate,
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
         Spacer(modifier = Modifier.height(AuraSpacing.XL))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(AuraSpacing.M),
+        AuraButton(
+            text = "Scan device", 
+            onClick = onScanClick,
             modifier = Modifier.fillMaxWidth()
-        ) {
-            AuraButton(
-                text = "IMPORT", 
-                onClick = onImportClick,
-                modifier = Modifier.weight(1f)
-            )
-            AuraOutlinedButton(
-                text = "SCAN DEVICE", 
-                onClick = onScanClick,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        )
+        Spacer(modifier = Modifier.height(AuraSpacing.M))
+        Text(
+            text = "Find your existing photos and videos in one step.",
+            style = MaterialTheme.typography.bodySmall,
+            color = AuraMutedSlate,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(AuraSpacing.XXS))
+        Text(
+            text = "Your media stays on your device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = AuraMutedSlate,
+            textAlign = TextAlign.Center
+        )
     }
 }

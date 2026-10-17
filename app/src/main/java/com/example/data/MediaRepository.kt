@@ -1110,8 +1110,21 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
     fun saveMedia(mediaId: String) {
         if (mediaId.isBlank()) return
         scope.launch {
-            val savedDao = database?.savedMediaDao() ?: return@launch
-            savedDao.saveMedia(SavedMediaEntity(mediaId = mediaId, savedAt = System.currentTimeMillis()))
+            savedToggleMutex.withLock {
+                val savedDao = database?.savedMediaDao() ?: return@withLock
+                val isAlreadySaved = savedDao.isSaved(mediaId)
+                if (!isAlreadySaved) {
+                    savedDao.saveMedia(SavedMediaEntity(mediaId = mediaId, savedAt = System.currentTimeMillis()))
+                    val item = getMediaItemById(mediaId)
+                    if (item != null && _tasteDNA.value.isFineTuningEnabled) {
+                        var dna = _tasteDNA.value
+                        PersonalizationTraitMapper.getEffectiveTraitAdjustments(item).forEach { (dim, mult) ->
+                            dna = dna.updateLearnedDimension(dim, mult * 0.03, 0.15)
+                        }
+                        if (dna != _tasteDNA.value) updateTasteDNA(dna, false, "Save")
+                    }
+                }
+            }
         }
     }
 
@@ -1135,6 +1148,14 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                     savedDao.deleteMedia(mediaId)
                 } else {
                     savedDao.saveMedia(SavedMediaEntity(mediaId = mediaId, savedAt = System.currentTimeMillis()))
+                    val item = getMediaItemById(mediaId)
+                    if (item != null && _tasteDNA.value.isFineTuningEnabled) {
+                        var dna = _tasteDNA.value
+                        PersonalizationTraitMapper.getEffectiveTraitAdjustments(item).forEach { (dim, mult) ->
+                            dna = dna.updateLearnedDimension(dim, mult * 0.03, 0.15)
+                        }
+                        if (dna != _tasteDNA.value) updateTasteDNA(dna, false, "Save")
+                    }
                 }
             }
         }
@@ -2198,7 +2219,7 @@ class MediaRepository(val dispatcher: CoroutineDispatcher = Dispatchers.IO) {
                                     "Visual Index Engine Loading..."
                                 } else {
                                     val pct = if (totalEligible > 0) (verifiedCount * 100) / totalEligible else 0
-                                    "Indexing Visuals: $verifiedCount / $totalEligible ($pct%)"
+                                    "Preparing Visual Search: $verifiedCount / $totalEligible ($pct%)"
                                 }
                             }
                             VisualIndexState.RED_INCOMPLETE -> {

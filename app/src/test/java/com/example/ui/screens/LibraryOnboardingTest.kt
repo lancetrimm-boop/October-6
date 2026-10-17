@@ -3,13 +3,13 @@ package com.example.ui.screens
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.data.*
+import com.example.data.cleanup.DeletionState
+import com.example.data.semantic.SearchRequest
+import com.example.ui.models.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -22,36 +22,48 @@ class LibraryOnboardingTest {
 
     @Test
     fun testLibraryOnboarding_RendersTargetCopyAndSingleScanDeviceButton() {
-        val repository = mock<MediaRepository>()
-        whenever(repository.mediaItems).thenReturn(MutableStateFlow(emptyList()))
-        whenever(repository.activeVisualReferences).thenReturn(MutableStateFlow(emptyList()))
-        whenever(repository.mediaItemsMap).thenReturn(MutableStateFlow(emptyMap()))
-        whenever(repository.selectedSortCategory).thenReturn(MutableStateFlow(SortCategory.STANDARD))
-        whenever(repository.selectedStandardSort).thenReturn(MutableStateFlow(StandardSortOption.NEWEST_FIRST))
-        whenever(repository.selectedIntelligentSort).thenReturn(MutableStateFlow(IntelligentSortOption.RECOMMENDED))
-        whenever(repository.latestAiSortRecommendation).thenReturn(MutableStateFlow(emptyList()))
-        whenever(repository.latestLibraryPresentation).thenReturn(MutableStateFlow(LibraryPresentationState(emptyList())))
-        whenever(repository.searchErrorState).thenReturn(MutableStateFlow(null))
-        whenever(repository.observeVisualIndexReadiness()).thenReturn(flowOf(VisualIndexReadiness(
-            state = VisualIndexState.NEUTRAL_EMPTY,
-            totalEligible = 0,
-            verifiedVisualCount = 0,
-            pendingCount = 0,
-            processingCount = 0,
-            failedCount = 0,
-            isModelReady = true,
-            label = "Empty"
-        )))
-        whenever(repository.scanProgressState).thenReturn(MutableStateFlow(ScanProgressState(isScanning = false)))
-        whenever(repository.importProgressState).thenReturn(MutableStateFlow(ImportProgressState(isImporting = false)))
+        val emptyState = LibraryPresentationState(
+            mediaItems = emptyList(),
+            selectedFilter = "ALL",
+            activeCategory = SortCategory.STANDARD,
+            standardSort = StandardSortOption.NEWEST_FIRST,
+            intelligentSort = IntelligentSortOption.PERSONALIZED,
+            searchRequest = SearchRequest.Text(""),
+            activeVisualReferences = emptyList()
+        )
 
         composeTestRule.setContent {
-            LibraryScreen(
-                repository = repository,
+            LibraryContent(
+                state = emptyState,
+                latestSortedItems = emptyList(),
+                mediaItemsMap = emptyMap(),
+                onFilterChange = {},
+                onCategoryChange = {},
+                onStandardSortChange = {},
+                onIntelligentSortChange = {},
+                onSearchQueryChange = {},
+                onSyncClick = {},
+                onAutoScrollSpeedChange = {},
+                onGridDensityChange = {},
                 onMediaSelect = { _, _ -> },
-                onNavigateToPairwise = {},
-                onNavigateToChannels = {},
-                onCompareLaunch = {}
+                onCompareLaunch = {},
+                onFavoriteToggle = {},
+                onImportUris = {},
+                onTriggerScan = {},
+                onRefresh = {},
+                onSafeDeleteRequest = { _, _ -> },
+                onLike = {},
+                onAddVisualReference = {},
+                onRemoveVisualReference = {},
+                onClearSearch = {},
+                onSearchByImage = { _, _ -> },
+                onSearchByMultipleImages = {},
+                deletionStateFlow = MutableStateFlow(DeletionState.IDLE),
+                libraryScrollIndex = 0,
+                libraryScrollOffset = 0,
+                onScrollPositionChange = { _, _ -> },
+                onLoadNextPage = {},
+                onRetryFailedEnrichment = {}
             )
         }
 
@@ -60,7 +72,7 @@ class LibraryOnboardingTest {
         composeTestRule.onNodeWithText("Aura discovers your photos and videos on your device to power personalized playback and visual discovery.").assertExists()
 
         // Assert single primary action button
-        composeTestRule.onNodeWithText("Scan device").assertExists()
+        composeTestRule.onNodeWithText("SCAN DEVICE").assertExists()
 
         // Assert supporting footer copy
         composeTestRule.onNodeWithText("Find your existing photos and videos in one step.").assertExists()

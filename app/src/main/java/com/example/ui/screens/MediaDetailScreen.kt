@@ -194,6 +194,8 @@ fun MediaDetailScreen(
     val tasteDNA by repository.tasteDNA.collectAsStateWithLifecycle()
     val isLoopEnabled by repository.libraryRepeatMode.collectAsStateWithLifecycle()
     val activeReferences by repository.activeVisualReferences.collectAsStateWithLifecycle()
+    val visualReadiness by repository.observeVisualIndexReadiness().collectAsStateWithLifecycle(null)
+    val isVisualIndexReady = visualReadiness?.state == com.example.data.VisualIndexState.GREEN_READY
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -1379,6 +1381,11 @@ fun MediaDetailScreen(
             isSaved = isSaved,
             onToggleSaved = { id -> repository.toggleSaved(id) },
             isVisualSearchActive = activeReferences.isNotEmpty(),
+            isVisualIndexReady = isVisualIndexReady,
+            onVisualIndexUnavailable = {
+                val label = visualReadiness?.label ?: "Preparing Visual Search..."
+                Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
+            },
             currentRating = currentRating,
             playbackSpeed = playbackSpeed,
             slideshowDelaySec = slideshowDelaySec,

@@ -135,6 +135,19 @@ object MediaThumbnailFetcher {
         }
     }
 
+    private fun openStream(context: Context, uri: Uri): java.io.InputStream? {
+        return try {
+            if (uri.scheme == "file" || uri.scheme == null) {
+                val path = uri.path ?: return null
+                File(path).inputStream()
+            } else {
+                context.contentResolver.openInputStream(uri)
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Higher-res photo decode for visual embeddings (avoids weak system thumbnails).
      */
@@ -145,7 +158,7 @@ object MediaThumbnailFetcher {
         if (!MediaCompatibility.isSupportedPhoto(mimeType, uriString)) return@withContext null
         try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            openStream(context, uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             val w = bounds.outWidth
             val h = bounds.outHeight
             if (w <= 0 || h <= 0) return@withContext null
@@ -156,7 +169,7 @@ object MediaThumbnailFetcher {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            val bitmap = context.contentResolver.openInputStream(uri)?.use {
+            val bitmap = openStream(context, uri)?.use {
                 BitmapFactory.decodeStream(it, null, opts)
             }
             if (isValidBitmap(bitmap)) bitmap else null

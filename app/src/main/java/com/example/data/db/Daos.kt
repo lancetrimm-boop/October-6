@@ -38,7 +38,7 @@ interface MediaDao {
         WHERE isDeleted = 0
         AND compatibilityStatus NOT IN ('CORRUPT', 'UNSUPPORTED', 'DELETED')
         AND enrichmentStatus IN ('PENDING', 'FAILED_RETRYABLE', 'TEXT_ONLY', 'VISUAL_ONLY')
-        AND enrichmentFailureCount < 3
+        AND enrichmentFailureCount < 5
         ORDER BY
             dateAdded DESC,
             lastViewedTimestamp DESC,
@@ -51,25 +51,25 @@ interface MediaDao {
     @Query("UPDATE media_items SET enrichmentStatus = :status, lastEnrichmentAttemptTimestamp = :timestamp WHERE id = :id")
     suspend fun updateEnrichmentStatus(id: String, status: String, timestamp: Long = System.currentTimeMillis())
 
-    @Query("UPDATE media_items SET enrichmentStatus = :status, enrichmentFailureCount = 3, lastEnrichmentAttemptTimestamp = :timestamp WHERE id = :id")
+    @Query("UPDATE media_items SET enrichmentStatus = :status, enrichmentFailureCount = enrichmentFailureCount + 1, lastEnrichmentAttemptTimestamp = :timestamp WHERE id = :id")
     suspend fun recordEnrichmentFailure(id: String, status: String, timestamp: Long = System.currentTimeMillis())
 
     @Query("""
         UPDATE media_items 
         SET enrichmentStatus = 'PENDING', enrichmentFailureCount = 0 
         WHERE enrichmentStatus = 'PROCESSING' 
-        OR (enrichmentStatus = 'FAILED_RETRYABLE' AND enrichmentFailureCount < 3)
-        OR (enrichmentFailureCount >= 3 AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL'))
+        OR enrichmentStatus = 'FAILED_RETRYABLE'
+        OR (enrichmentFailureCount >= 5 AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL'))
     """)
     suspend fun recoverStuckEnrichment()
 
     @Query("""
         UPDATE media_items
-        SET enrichmentFailureCount = 3
+        SET enrichmentFailureCount = 5
         WHERE isDeleted = 0
         AND compatibilityStatus NOT IN ('CORRUPT', 'UNSUPPORTED', 'DELETED')
         AND id NOT IN (SELECT mediaId FROM semantic_representations WHERE representationType = 'VISUAL')
-        AND enrichmentFailureCount < 3
+        AND enrichmentFailureCount < 5
     """)
     suspend fun markUnextractableMediaAsTerminal()
 
@@ -175,7 +175,7 @@ interface MediaDao {
             COUNT(CASE WHEN enrichmentStatus = 'COMPLETE' THEN 1 END) as completeCount,
             COUNT(CASE WHEN enrichmentStatus = 'TEXT_ONLY' THEN 1 END) as textOnlyCount,
             COUNT(CASE WHEN enrichmentStatus IN ('FAILED_RETRYABLE', 'FAILED_PERMANENT') THEN 1 END) as failedCount,
-            COUNT(CASE WHEN enrichmentFailureCount >= 3 OR enrichmentStatus = 'FAILED_PERMANENT' THEN 1 END) as terminalFailedCount
+            COUNT(CASE WHEN enrichmentFailureCount >= 5 OR enrichmentStatus = 'FAILED_PERMANENT' THEN 1 END) as terminalFailedCount
         FROM media_items
         WHERE isDeleted = 0 AND compatibilityStatus NOT IN ('CORRUPT', 'UNSUPPORTED', 'DELETED')
     """)

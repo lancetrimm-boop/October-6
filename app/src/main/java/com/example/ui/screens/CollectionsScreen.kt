@@ -190,21 +190,6 @@ fun CollectionsScreen(
             )
         )
 
-        // 3. Recently Viewed
-        if (watchHistory.isNotEmpty()) {
-            userCollections.add(
-                SmartCollection(
-                    id = "user_watch_history",
-                    title = "Recently Viewed",
-                    description = "Recently viewed media",
-                    gradientColors = listOf(0xFF6366F1, 0xFF4338CA),
-                    items = watchHistory,
-                    section = "USER_MEDIA",
-                    representativeItem = watchHistory.firstOrNull() // Already sorted by recency
-                )
-            )
-        }
-
         userCollections
     }
 
